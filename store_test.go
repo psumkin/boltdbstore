@@ -173,8 +173,16 @@ func TestPut(t *testing.T) {
 	t.Log("#TestPut,#GetRecordsMap", rmap)
 }
 
-func init() {
+func TestMain(m *testing.M) {
+	// setup
 	if p := os.Getenv("BOLTDB_PATH"); p == "" {
 		os.Setenv("BOLTDB_PATH", "test.db")
 	}
+	os.Remove(os.Getenv("BOLTDB_PATH"))
+	// run tests
+	e := m.Run()
+	// teardown
+	os.Remove(os.Getenv("BOLTDB_PATH"))
+	// fin
+	os.Exit(e)
 }
