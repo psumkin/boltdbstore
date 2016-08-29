@@ -17,34 +17,34 @@ package boltdbstore
 import (
 	"encoding/json"
 	"errors"
-
-	log "github.com/Sirupsen/logrus"
-	"github.com/spf13/viper"
+	"os"
 
 	"github.com/boltdb/bolt"
 )
 
-// Storable defines collection interface
-type Storable interface {
+// Stored defines collection interface
+type Stored interface {
 	// Bucket returns the bucket name
 	Bucket() []byte
-	// Next is an iterator, takes key returns ref to item instance
+	// Next is an iterator, takes key and returns pointer to item instance
 	Next([]byte) interface{}
 }
 
-// GetStorable loads all items from boltdb Bucket
-func GetStorable(items Storable) error {
+// GetStored loads all items from boltdb Bucket
+func GetStored(items Stored) (err error) {
 	bucket := items.Bucket()
-	db := openDBBucket(bucket)
+	db, err := openBucket(bucket)
+	if err != nil {
+		return
+	}
 	defer db.Close()
 
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 
 		b.ForEach(func(k, v []byte) error {
 
 			if err := json.Unmarshal(v, items.Next(k)); err != nil {
-				log.Errorln("#DB,#GetStorable", err)
 				return err
 			}
 
@@ -53,75 +53,76 @@ func GetStorable(items Storable) error {
 
 		return nil
 	})
-	return err
+	return
 }
 
 // Delete deletes key from boltdb Bucket
 func Delete(bucket []byte, key []byte) error {
-	db := openDBBucket(bucket)
+	db, err := openBucket(bucket)
+	if err != nil {
+		return err
+	}
 	defer db.Close()
 
 	if err := db.Update(func(tx *bolt.Tx) error {
 		return tx.Bucket(bucket).Delete(key)
 	}); err != nil {
-		log.Errorln("#DB,#Delete", err)
 		return err
 	}
 	return nil
 }
 
-// Load loads item from boltdb Bucket
-func Load(bucket []byte, key []byte, v interface{}) error {
-	db := openDBBucket(bucket)
+// Get gets item from boltdb Bucket
+func Get(bucket []byte, key []byte, v interface{}) (err error) {
+	db, err := openBucket(bucket)
+	if err != nil {
+		return
+	}
 	defer db.Close()
 
-	log.Debugln("#DB", "Load data from DB")
-	err := db.View(func(tx *bolt.Tx) error {
+	err = db.View(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		buf := b.Get(key)
 		if buf == nil {
-			log.Debugln("#DB,#Load,#Nil")
 			return errors.New("Key does not exist or key is a nested bucket")
 		}
 
 		if err := json.Unmarshal(buf, &v); err != nil {
-			log.Errorln("#DB,#Load", err)
 			return err
 		}
 		return nil
 	})
-	return err
+	return
 }
 
-// Save stores item in boltdb Bucket as JSON
-func Save(bucket []byte, key []byte, v interface{}) error {
-	db := openDBBucket(bucket)
+// Put puts item into boltdb Bucket as JSON
+func Put(bucket []byte, key []byte, v interface{}) (err error) {
+	db, err := openBucket(bucket)
+	if err != nil {
+		return
+	}
 	defer db.Close()
 
-	log.Debugln("#DB", "Save data to DB")
-	err := db.Update(func(tx *bolt.Tx) error {
+	err = db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket(bucket)
 		vEncoded, err := json.Marshal(v)
-		log.Debugln("#DB,#Save,#Encoded", string(vEncoded))
 		if err != nil {
-			log.Errorln("#DB,#Store", err)
 			return err
 		}
 		if err := b.Put(key, vEncoded); err != nil {
-			log.Errorln("#DB,#Store", err)
 			return err
 		}
 		return nil
 	})
-	return err
+	return
 }
 
-func openDBBucket(bucket []byte) *bolt.DB {
-	path := viper.GetString("BoltDBPath")
-	log.Debugln("Open #DB -> ", path)
+func openBucket(bucket []byte) (*bolt.DB, error) {
+	path := os.Getenv("BOLTDB_PATH")
+
 	db, err := bolt.Open(path, 0600, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	if err = db.Update(func(tx *bolt.Tx) error {
@@ -131,8 +132,8 @@ func openDBBucket(bucket []byte) *bolt.DB {
 		}
 		return nil
 	}); err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return db
+	return db, nil
 }
