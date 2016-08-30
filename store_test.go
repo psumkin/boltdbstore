@@ -17,78 +17,7 @@ package boltdbstore
 import (
 	"os"
 	"testing"
-
-	"github.com/satori/go.uuid"
 )
-
-// RecordsBucket defines boltdb bucket for example data
-const RecordsBucket = "Records"
-
-// Record represents example data
-type Record struct {
-	ID uuid.UUID
-}
-
-// RecordsMap represents example data
-type RecordsMap map[string]*Record
-
-// RecordsSlice represents example data
-type RecordsSlice []*Record
-
-// Put puts item into boltdb Bucket as JSON
-func (r Record) Put() error {
-	return Put([]byte(RecordsBucket), []byte(r.ID.String()), r)
-}
-
-// Bucket implements Stored interface
-func (RecordsMap) Bucket() []byte {
-	return []byte(RecordsBucket)
-}
-
-// Next implements Stored interface
-func (items *RecordsMap) Next(k []byte) interface{} {
-	// Check for assignment to entry in nil map
-	if *items == nil {
-		*items = make(RecordsMap)
-	}
-
-	(*items)[string(k)] = &Record{}
-	return (*items)[string(k)]
-}
-
-// Bucket implements Stored interface
-func (RecordsSlice) Bucket() []byte {
-	return []byte(RecordsBucket)
-}
-
-// Next implements Stored interface
-func (items *RecordsSlice) Next([]byte) interface{} {
-	*items = append(*items, &Record{})
-	return &(*items)[len(*items)-1]
-}
-
-// DeleteRecord deletes item from boltdb Bucket
-func DeleteRecord(id uuid.UUID) error {
-	return Delete([]byte(RecordsBucket), []byte(id.String()))
-}
-
-// GetRecord gets item from boltdb Bucket
-func GetRecord(id uuid.UUID) (r Record, err error) {
-	err = Get([]byte(RecordsBucket), []byte(id.String()), &r)
-	return
-}
-
-// GetRecordsMap returns collection from boltdb Bucket
-func GetRecordsMap() (items RecordsMap, err error) {
-	err = GetStored(&items)
-	return
-}
-
-// GetRecordsSlice returns collection from boltdb Bucket
-func GetRecordsSlice() (items RecordsSlice, err error) {
-	err = GetStored(&items)
-	return
-}
 
 func TestOpenBucket(t *testing.T) {
 	db, err := openBucket([]byte(RecordsBucket))
@@ -99,11 +28,26 @@ func TestOpenBucket(t *testing.T) {
 	}
 }
 
-func TestDelete(t *testing.T) {
-	r := Record{uuid.NewV4()}
-	err := r.Put()
+func TestPut(t *testing.T) {
+	r := NewRecord()
+	err := r.Save()
 	if err != nil {
-		t.Fatal("#TestDelete,#Put", err, r)
+		t.Error("#TestPut,#Save", err, r)
+	}
+
+	rmap, err := GetRecordsMap()
+	if err != nil {
+		t.Error("#TestPut,#GetRecordsMap", err, rmap)
+	}
+
+	t.Log("#TestPut,#GetRecordsMap", rmap)
+}
+
+func TestDelete(t *testing.T) {
+	r := NewRecord()
+	err := r.Save()
+	if err != nil {
+		t.Fatal("#TestDelete,#Save", err, r)
 	}
 
 	err = DeleteRecord(r.ID)
@@ -118,10 +62,10 @@ func TestDelete(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	r := Record{uuid.NewV4()}
-	err := r.Put()
+	r := NewRecord()
+	err := r.Save()
 	if err != nil {
-		t.Fatal("#TestGet,#Put", err, r)
+		t.Fatal("#TestGet,#Save", err, r)
 	}
 
 	buf, err := GetRecord(r.ID)
@@ -133,10 +77,10 @@ func TestGet(t *testing.T) {
 }
 
 func TestGetStored(t *testing.T) {
-	r := Record{uuid.NewV4()}
-	err := r.Put()
+	r := NewRecord()
+	err := r.Save()
 	if err != nil {
-		t.Fatal("#TestGetStored,#Put", err, r)
+		t.Fatal("#TestGetStored,#Save", err, r)
 	}
 
 	rslice, err := GetRecordsSlice()
@@ -150,27 +94,6 @@ func TestGetStored(t *testing.T) {
 	}
 
 	t.Log("#TestGetStored,#GetRecordsMap", rmap)
-}
-
-func TestPut(t *testing.T) {
-	r := Record{uuid.NewV4()}
-	err := r.Put()
-	if err != nil {
-		t.Error("#TestPut,#Put", err, r)
-	}
-
-	pr := &Record{uuid.NewV4()}
-	err = pr.Put()
-	if err != nil {
-		t.Error("#TestPut,#Put,#pr", err, *pr)
-	}
-
-	rmap, err := GetRecordsMap()
-	if err != nil {
-		t.Error("#TestPut,#GetRecordsMap", err, rmap)
-	}
-
-	t.Log("#TestPut,#GetRecordsMap", rmap)
 }
 
 func TestMain(m *testing.M) {
